@@ -31,8 +31,8 @@ This project automatically creates and updates Obsidian notes whenever a Docker 
 
 3. Deploy Docker monitor
    Compose file I used below:
-   ```
-version: '3'
+   
+```version: '3'
 services:
   docker-monitor:
     image: alpine
@@ -92,3 +92,4 @@ networks:
 - [ ] Add error handling
 - [ ] Create backup procedures
 - [ ] Add additional detail and screenshots to README
+- [ ] Add JSON workflow file for users to import after switching my info out for placeholders
