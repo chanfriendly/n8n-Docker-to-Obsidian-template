@@ -1,5 +1,7 @@
 # Docker-to-Obsidian Automation
 
+![image](https://github.com/user-attachments/assets/852980ee-f8af-4568-8ef8-9e84b497e7ef)
+
 Automatically document Docker stack deployments in Obsidian using n8n automation.
 
 ## Overview
@@ -93,3 +95,4 @@ networks:
 - [ ] Create backup procedures
 - [ ] Add additional detail and screenshots to README
 - [ ] Add JSON workflow file for users to import after switching my info out for placeholders
+- [ ] Once I have my Jetson Orin set up with LLama 3, I will adjust workflow to incorporate that
