@@ -1,6 +1,7 @@
 # Docker-to-Obsidian Automation
 
-![image](https://github.com/user-attachments/assets/852980ee-f8af-4568-8ef8-9e84b497e7ef)
+![image](https://github.com/user-attachments/assets/ac6d37f9-65f4-410a-b8e9-6feed660318b)
+
 
 Automatically document Docker stack deployments in Obsidian using n8n automation.
 *I will be returning to complete a more in depth README. This branch is for using an LLM to help with the process. I am still fine-tuning this, and the output is not in a desired state.*
