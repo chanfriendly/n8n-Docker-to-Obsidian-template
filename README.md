@@ -3,6 +3,7 @@
 ![image](https://github.com/user-attachments/assets/852980ee-f8af-4568-8ef8-9e84b497e7ef)
 
 Automatically document Docker stack deployments in Obsidian using n8n automation.
+*I will be returning to complete a more in depth README. This branch is for using an LLM to help with the process. I am still fine-tuning this, and the output is not in a desired state.*
 
 ## Overview
 This project automatically creates and updates Obsidian notes whenever a Docker stack is deployed, providing automatic documentation of your infrastructure.
