@@ -1,0 +1,789 @@
+{
+  "name": "Obsidian Service Creation",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "/docker-stack",
+        "authentication": "headerAuth",
+        "options": {}
+      },
+      "name": "Docker Event Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "position": [
+        -40,
+        -180
+      ],
+      "id": "aa2ae928-ec6b-43c0-88c5-b47c956f24e2",
+      "typeVersion": 2,
+      "webhookId": "38e9a257-dcab-4076-9044-45ef8b363814",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "1ASqfR4xwKGzzrbj",
+          "name": "Portainer Header Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "http://192.168.1.124:27123/vault//HomeLab/test.md",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer a1f706c21b4a67645eba07dd9b5e945d207e0857f1a43fc3fedb30d1d91fef61"
+            },
+            {
+              "name": "Content-Type",
+              "value": "text/markdown"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "content",
+              "value": "={\n    \"file\": \"HomeLab/Services/test.md\",\n    \"content\": \"---\\ncreated: {{$now}}\\ntype: docker-stack\\nstack_name: testest\\n---\\n\\n# test\\n\\n## Configuration\\n```json\\ntest\\n```\"\n}"
+            }
+          ]
+        },
+        "options": {
+          "allowUnauthorizedCerts": false
+        }
+      },
+      "name": "Trigger Obsidian Webhook",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        1780,
+        -220
+      ],
+      "id": "671d8a8b-fa0d-4fef-833b-b50aa777dffb",
+      "typeVersion": 4.2,
+      "notesInFlow": true,
+      "notes": "Creates or updates notes"
+    },
+    {
+      "parameters": {
+        "model": "llama3.2:3b",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+      "typeVersion": 1,
+      "position": [
+        960,
+        80
+      ],
+      "id": "05f45a50-30a7-407d-9594-2413a9bf2dc6",
+      "name": "Ollama Chat Model",
+      "credentials": {
+        "ollamaApi": {
+          "id": "q5NK74Xoa0XoaPAG",
+          "name": "Ollama account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Please create documentation for the following Docker stack change:\n\nService Name: {{ $('Merge').item.json.stackInfo.name }}\nLast Updated: {{ $('Merge').item.json.stackInfo.lastUpdate }}\nStatus: {{ $('Merge').item.json.stackInfo.status }}\nConfiguration:\n{{ $json.composeContent }}",
+        "options": {
+          "systemMessage": "You are a documentation specialist for Docker infrastructure. When a Docker stack is created or changes, you will generate complete documentation following an exact template structure. \n\nYour task is to analyze the provided Docker configuration and generate documentation that exactly matches the following template, maintaining all headers and sections:\n\n# {{service_name}}\n\n## Overview\n- **Service**: {{service_name}}\n- **Image**: {{image}}\n- **Created**: {{date}}\n- **Last Updated**: {{update_date}}\n- **Status**: {{status}}\n\n## Configuration\n### Docker Compose\n```yaml\n{{compose_configuration}}\n```\n\n### Environment Variables\n{{environment_variables}}\n\n### Ports\n{{ports}}\n\n### Volumes\n{{volumes}}\n\n## Setup Guide\n### Prerequisites\n- Required software\n- Network requirements\n- Dependencies\n\n### Installation Steps\n1. Ensure Docker is running\n2. Configure environment variables\n3. Deploy the stack\n\n### Post-Installation\n- [ ] Verify service is running\n- [ ] Test basic functionality\n- [ ] Configure backups\n- [ ] Set up monitoring\n\n## Troubleshooting\n### Common Issues\n- Service won't start\n- Connection issues\n- Permission problems\n\n### Log Locations\n- Container logs: `docker logs {{container_name}}`\n- Service-specific logs: {{log_paths}}\n\n### Quick Fixes\n4. Check container status\n5. Verify network connectivity\n6. Validate configuration\n7. Review resource usage\n\n## Notes\n- Important details\n- Known limitations\n- Related services\n\n#service #docker #{{service_name_lowercase}}\n\nRules:\n- Replace all {{variables}} with actual values from the Docker configuration\n- If a value is not available, use \"Not specified\" rather than leaving empty\n- Preserve all headers and sections exactly as shown\n- Format all code blocks using proper markdown\n- Use technical but clear language\n- Include the tags at the bottom exactly as shown"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        1200,
+        -220
+      ],
+      "id": "5d7a8d76-e3f7-41d0-bd25-e17b4ca1a6b9",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "jsCode": "// N8N Function Node code\nconst processWebhookData = (items) => {\n  const firstItem = items[0];\n  const stacks = firstItem.json.body.stacks;\n  \n  // Find most recently updated stack\n  const sorted = stacks.sort((a, b) => b.UpdateDate - a.UpdateDate);\n  const mostRecent = sorted[0];\n  \n  // Get stack-specific context\n  const stackContext = getStackContext(mostRecent.Name);\n  \n  // Format environment variables for display\n  const envVars = mostRecent.Env.map(env => `- ${env.name}: ${env.value}`).join('\\n');\n  \n  // Create detailed output\n  const output = {\n    stackInfo: {\n      name: mostRecent.Name,\n      id: mostRecent.Id,\n      lastUpdate: new Date(mostRecent.UpdateDate * 1000).toISOString(),\n      updatedBy: mostRecent.UpdatedBy,\n      environment: mostRecent.Env,\n      projectPath: mostRecent.ProjectPath,\n      status: mostRecent.Status === 1 ? 'Active' : 'Inactive',\n      // Add Portainer-specific information for the next node\n      portainerInfo: {\n        stackId: mostRecent.Id,\n        endpointId: mostRecent.EndpointId,\n        // The URL to fetch the compose file will be:\n        // GET /api/stacks/{stackId}/file?endpointId={endpointId}\n        composeFilePath: `/api/stacks/${mostRecent.Id}/file?endpointId=${mostRecent.EndpointId}`\n      }\n    },\n    // Create a placeholder for the compose content that will be filled by the HTTP Request\n    composeContent: null,\n    prompt: `Please create or update documentation for the Docker stack \"${mostRecent.Name}\".\n\nStack Information:\n- Name: ${mostRecent.Name}\n- Status: ${mostRecent.Status === 1 ? 'Active' : 'Inactive'}\n- Last Updated: ${new Date(mostRecent.UpdateDate * 1000).toISOString()}\n- Updated By: ${mostRecent.UpdatedBy}\n- Location: ${mostRecent.ProjectPath}\n\n${stackContext}\n\n${envVars ? `Environment Variables:\\n${envVars}` : 'No environment variables configured.'}\n\n[Compose file content will be added by the next node]\n\nPlease create comprehensive Markdown documentation that includes:\n1. Overview of the stack's purpose and functionality\n2. Configuration details and deployment location\n3. Environment variable explanations (if present)\n4. Analysis of the docker-compose configuration\n5. Dependencies and requirements\n6. Any notable changes in this update\n7. Current deployment status\n\nFormat the documentation with proper Markdown headers and sections.`\n  };\n  \n  return { json: output };\n};\n\n// Helper function to provide context for known stacks\nfunction getStackContext(stackName) {\n  const contexts = {\n    'immich': 'This is a self-hosted photo and video backup solution. Consider documenting backup locations, database configuration, and media handling.',\n    'paperless': 'This is a document management system with OCR capabilities. Include information about document processing, OCR languages, and storage locations.',\n    'n8n': 'This is an automation platform. Document the webhook configurations, database connections, and any custom workflow requirements.',\n    'obsidian': 'This is for the Obsidian note-taking application. Include details about sync configuration and plugin requirements.',\n    'jupyter': 'This is a Jupyter notebook server. Document Python environment details and data persistence.',\n    'guacamole': 'This is a remote desktop gateway. Include connection methods and security configurations.',\n    'nginx': 'This is the NGINX web server. Document proxy configurations and SSL settings.',\n  };\n  \n  return contexts[stackName.toLowerCase()] \n    ? `Stack Context:\\n${contexts[stackName.toLowerCase()]}\\n`\n    : '';\n}\n\nreturn processWebhookData($input.all());"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        180,
+        -180
+      ],
+      "id": "7b0adec8-31c7-4716-b8d9-20435fe02434",
+      "name": "Process Stack Change"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        620,
+        -180
+      ],
+      "id": "21367d54-ca3e-47fd-a0e3-2b00bb450019",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "e1399217-4bd1-4734-80b3-2d11db07aa8f",
+              "name": "prompt",
+              "value": "=Please create documentation for the following Docker stack update:\n\nStack Information:\n- Name: {{ $json.stackInfo.name }}\n- Status: {{ $json.stackInfo.status }}\n- Last Updated: {{ $json.stackInfo.lastUpdate }}\n- Updated By: {{ $json.stackInfo.updatedBy }}\n- Location: {{ $json.stackInfo.projectPath }}\n\nDocker Compose Configuration:\n```yaml\n{{ $json.StackFileContent }}\n\nYou are a documentation specialist for Docker infrastructure. Generate complete documentation following this exact template:\n\n# {{ $json.stackInfo.name }}\n\n## Overview\n- Service: {{ $json.stackInfo.name }}\n- Status: {{ $json.stackInfo.status }}\n- Last Updated: {{ $json.stackInfo.lastUpdate }}\n- Updated By: {{ $json.stackInfo.updatedBy }}\n- Location: {{ $json.stackInfo.projectPath }}\n\n## Configuration\n### Docker Compose\n```yaml\n{{ $json.StackFileContent }}\nEnvironment Variables\n[List all environment variables with explanations]\nPorts\n[List all port mappings and their purposes]\nVolumes\n[List all volume mounts and their purposes]\n\n## Setup Guide\n### Prerequisites\n- Required software\n- Network requirements\n- Dependencies\n\n### Installation Steps\n1. Ensure Docker is running\n2. Configure environment variables\n3. Deploy the stack\n\n### Post-Installation\n- [ ] Verify service is running\n- [ ] Test basic functionality\n- [ ] Configure backups\n- [ ] Set up monitoring\n\n## Troubleshooting\n### Common Issues\n- Service won't start\n- Connection issues\n- Permission problems\n\n### Log Locations\n- Container logs: `docker logs {{ $json.stackInfo.name }}`\n- Service-specific logs: [Specify paths based on configuration]\n\n### Quick Fixes\n1. Check container status\n2. Verify network connectivity\n3. Validate configuration\n4. Review resource usage\n\nCopy## Notes\n- Important operational details\n- Known limitations\n- Related services\n- Security considerations\n\n#service #docker #{{ $json.stackInfo.name.toLowerCase() }}",
+              "type": "string"
+            },
+            {
+              "id": "29ba2b4a-9632-4ed7-910b-8e126c4d3719",
+              "name": "stackInfo",
+              "value": "={{ $json.stackInfo }}",
+              "type": "string"
+            },
+            {
+              "id": "cc60d052-c348-4f56-baa8-ef2ac6615377",
+              "name": "composeContent",
+              "value": "={{ $json.StackFileContent }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        840,
+        -180
+      ],
+      "id": "cdcff24f-4964-44bf-a944-8dee692419d8",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "url": "=https://192.168.1.124:9004/api/stacks/{{$json.stackInfo.portainerInfo.stackId}}/file?endpointId={{$json.stackInfo.portainerInfo.endpointId}}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "ptr_LNYElvcN8Eq258F6nTZlTzlvuoGIKeLvxpyYHhP1nt8="
+            }
+          ]
+        },
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        400,
+        -300
+      ],
+      "id": "4420c328-65ef-4123-9a25-b7e5b69996a0",
+      "name": "Pull Docker Compose",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "1ASqfR4xwKGzzrbj",
+          "name": "Portainer Header Auth"
+        }
+      }
+    }
+  ],
+  "pinData": {
+    "Docker Event Webhook": [
+      {
+        "json": {
+          "headers": {
+            "connection": "close",
+            "host": "n8n.chanfriendly.synology.me",
+            "x-real-ip": "192.168.1.1",
+            "x-forwarded-for": "192.168.1.1",
+            "x-forwarded-proto": "https",
+            "content-length": "7382",
+            "user-agent": "curl/8.12.0",
+            "accept": "*/*",
+            "content-type": "application/json",
+            "x-webhook-secret": "%so0%w#d4cxx3%MjDR*BDqNDsp98488bYkcQ"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "event_type": "stack_change",
+            "stacks": [
+              {
+                "Id": 9,
+                "Name": "arr-compose",
+                "Type": 2,
+                "EndpointId": 3,
+                "SwarmId": "",
+                "EntryPoint": "docker-compose.yml",
+                "Env": [],
+                "ResourceControl": null,
+                "Status": 1,
+                "ProjectPath": "/data/compose/9",
+                "CreationDate": 1735157743,
+                "CreatedBy": "admin",
+                "UpdateDate": 1735178965,
+                "UpdatedBy": "admin",
+                "AdditionalFiles": null,
+                "AutoUpdate": null,
+                "Option": null,
+                "GitConfig": null,
+                "FromAppTemplate": false,
+                "Namespace": ""
+              },
+              {
+                "Id": 11,
+                "Name": "immich",
+                "Type": 2,
+                "EndpointId": 3,
+                "SwarmId": "",
+                "EntryPoint": "docker-compose.yml",
+                "Env": [
+                  {
+                    "name": "UPLOAD_LOCATION",
+                    "value": "/mnt/volume1/media/photos"
+                  },
+                  {
+                    "name": "DB_DATA_LOCATION",
+                    "value": "/mnt/volume1/docker/immich"
+                  },
+                  {
+                    "name": "IMMICH_VERSION",
+                    "value": "release"
+                  },
+                  {
+                    "name": "DB_PASSWORD",
+                    "value": "postgres"
+                  },
+                  {
+                    "name": "DB_USERNAME",
+                    "value": "postgres"
+                  },
+                  {
+                    "name": "DB_DATABASE_NAME",
+                    "value": "immich"
+                  }
+                ],
+                "ResourceControl": null,
+                "Status": 1,
+                "ProjectPath": "/data/compose/11",
+                "CreationDate": 1735334694,
+                "CreatedBy": "admin",
+                "UpdateDate": 0,
+                "UpdatedBy": "",
+                "AdditionalFiles": null,
+                "AutoUpdate": null,
+                "Option": null,
+                "GitConfig": null,
+                "FromAppTemplate": false,
+                "Namespace": ""
+              },
+              {
+                "Id": 12,
+                "Name": "hoarder",
+                "Type": 2,
+                "EndpointId": 3,
+                "SwarmId": "",
+                "EntryPoint": "docker-compose.yml",
+                "Env": [
+                  {
+                    "name": "HOARDER_VERSION",
+                    "value": "release"
+                  },
+                  {
+                    "name": "NEXTAUTH_SECRET",
+                    "value": "Dm99HbEGUCYfIM814IDAghlkxEpS01joaFeJ"
+                  },
+                  {
+                    "name": "MEILI_MASTER_KEY",
+                    "value": "0bLWJdHpFPO4H6b4xPjpIXpL1NJ1AGsVjc6x"
+                  },
+                  {
+                    "name": "NEXTAUTH_URL",
+                    "value": "http://localhost:3000"
+                  }
+                ],
+                "ResourceControl": null,
+                "Status": 1,
+                "ProjectPath": "/data/compose/12",
+                "CreationDate": 1735579931,
+                "CreatedBy": "admin",
+                "UpdateDate": 0,
+                "UpdatedBy": "",
+                "AdditionalFiles": null,
+                "AutoUpdate": null,
+                "Option": null,
+                "GitConfig": null,
+                "FromAppTemplate": false,
+                "Namespace": ""
+              },
+              {
+                "Id": 13,
+                "Name": "paperless",
+                "Type": 2,
+                "EndpointId": 3,
+                "SwarmId": "",
+                "EntryPoint": "docker-compose.yml",
+                "Env": [
+                  {
+                    "name": "USERMAP_UID",
+                    "value": "1000"
+                  },
+                  {
+                    "name": "USERMAP_GID",
+                    "value": "1000"
+                  },
+                  {
+                    "name": "PAPERLESS_TIME_ZONE",
+                    "value": "America/New_York"
+                  },
+                  {
+                    "name": "PAPERLESS_OCR_LANGUAGE",
+                    "value": "eng"
+                  },
+                  {
+                    "name": "PAPERLESS_OCR_LANGUAGES",
+                    "value": "tur ces"
+                  }
+                ],
+                "ResourceControl": null,
+                "Status": 1,
+                "ProjectPath": "/data/compose/13",
+                "CreationDate": 1735677316,
+                "CreatedBy": "admin",
+                "UpdateDate": 1739288427,
+                "UpdatedBy": "admin",
+                "AdditionalFiles": null,
+                "AutoUpdate": null,
+                "Option": null,
+                "GitConfig": null,
+                "FromAppTemplate": false,
+                "Namespace": ""
+              },
+              {
+                "Id": 14,
+                "Name": "obsidian",
+                "Type": 2,
+                "EndpointId": 3,
+                "SwarmId": "",
+                "EntryPoint": "docker-compose.yml",
+                "Env": [],
+                "ResourceControl": null,
+                "Status": 1,
+                "ProjectPath": "/data/compose/14",
+                "CreationDate": 1736097329,
+                "CreatedBy": "admin",
+                "UpdateDate": 1737315388,
+                "UpdatedBy": "admin",
+                "AdditionalFiles": null,
+                "AutoUpdate": null,
+                "Option": null,
+                "GitConfig": null,
+                "FromAppTemplate": false,
+                "Namespace": ""
+              },
+              {
+                "Id": 15,
+                "Name": "tubesync",
+                "Type": 2,
+                "EndpointId": 3,
+                "SwarmId": "",
+                "EntryPoint": "docker-compose.yml",
+                "Env": [],
+                "ResourceControl": null,
+                "Status": 1,
+                "ProjectPath": "/data/compose/15",
+                "CreationDate": 1736206051,
+                "CreatedBy": "admin",
+                "UpdateDate": 0,
+                "UpdatedBy": "",
+                "AdditionalFiles": null,
+                "AutoUpdate": null,
+                "Option": null,
+                "GitConfig": null,
+                "FromAppTemplate": false,
+                "Namespace": ""
+              },
+              {
+                "Id": 17,
+                "Name": "youtube-dl",
+                "Type": 2,
+                "EndpointId": 3,
+                "SwarmId": "",
+                "EntryPoint": "docker-compose.yml",
+                "Env": [],
+                "ResourceControl": null,
+                "Status": 1,
+                "ProjectPath": "/data/compose/17",
+                "CreationDate": 1736266788,
+                "CreatedBy": "admin",
+                "UpdateDate": 1736274043,
+                "UpdatedBy": "admin",
+                "AdditionalFiles": null,
+                "AutoUpdate": null,
+                "Option": null,
+                "GitConfig": null,
+                "FromAppTemplate": false,
+                "Namespace": ""
+              },
+              {
+                "Id": 19,
+                "Name": "n8n",
+                "Type": 2,
+                "EndpointId": 3,
+                "SwarmId": "",
+                "EntryPoint": "docker-compose.yml",
+                "Env": [
+                  {
+                    "name": "DOMAIN_NAME",
+                    "value": "chanfriendly.synology.me"
+                  },
+                  {
+                    "name": "SUBDOMAIN",
+                    "value": "n8n"
+                  },
+                  {
+                    "name": "GENERIC_TIMEZONE",
+                    "value": "America/New_York"
+                  },
+                  {
+                    "name": "SSL_EMAIL",
+                    "value": "christian.aglass@yahoo.com"
+                  },
+                  {
+                    "name": "N8N_ENCRYPTION_KEY",
+                    "value": "OBY172A8ZLNIJl5W3r6zMeHtiZ48eUjS"
+                  }
+                ],
+                "ResourceControl": null,
+                "Status": 1,
+                "ProjectPath": "/data/compose/19",
+                "CreationDate": 1736804747,
+                "CreatedBy": "admin",
+                "UpdateDate": 1739486866,
+                "UpdatedBy": "admin",
+                "AdditionalFiles": null,
+                "AutoUpdate": null,
+                "Option": null,
+                "GitConfig": null,
+                "FromAppTemplate": false,
+                "Namespace": ""
+              },
+              {
+                "Id": 22,
+                "Name": "webhook-notification",
+                "Type": 2,
+                "EndpointId": 3,
+                "SwarmId": "",
+                "EntryPoint": "docker-compose.yml",
+                "Env": [],
+                "ResourceControl": null,
+                "Status": 1,
+                "ProjectPath": "/data/compose/22",
+                "CreationDate": 1736855790,
+                "CreatedBy": "admin",
+                "UpdateDate": 1739105897,
+                "UpdatedBy": "admin",
+                "AdditionalFiles": null,
+                "AutoUpdate": null,
+                "Option": null,
+                "GitConfig": null,
+                "FromAppTemplate": false,
+                "Namespace": ""
+              },
+              {
+                "Id": 24,
+                "Name": "guacamole",
+                "Type": 2,
+                "EndpointId": 3,
+                "SwarmId": "",
+                "EntryPoint": "docker-compose.yml",
+                "Env": [],
+                "ResourceControl": null,
+                "Status": 1,
+                "ProjectPath": "/data/compose/24",
+                "CreationDate": 1737077138,
+                "CreatedBy": "admin",
+                "UpdateDate": 0,
+                "UpdatedBy": "",
+                "AdditionalFiles": null,
+                "AutoUpdate": null,
+                "Option": null,
+                "GitConfig": null,
+                "FromAppTemplate": false,
+                "Namespace": ""
+              },
+              {
+                "Id": 31,
+                "Name": "nginx",
+                "Type": 2,
+                "EndpointId": 3,
+                "SwarmId": "",
+                "EntryPoint": "docker-compose.yml",
+                "Env": [],
+                "ResourceControl": null,
+                "Status": 1,
+                "ProjectPath": "/data/compose/31",
+                "CreationDate": 1737470828,
+                "CreatedBy": "admin",
+                "UpdateDate": 1737472993,
+                "UpdatedBy": "admin",
+                "AdditionalFiles": null,
+                "AutoUpdate": null,
+                "Option": null,
+                "GitConfig": null,
+                "FromAppTemplate": false,
+                "Namespace": ""
+              },
+              {
+                "Id": 32,
+                "Name": "lgbtqedu",
+                "Type": 2,
+                "EndpointId": 3,
+                "SwarmId": "",
+                "EntryPoint": "docker-compose.yml",
+                "Env": [],
+                "ResourceControl": null,
+                "Status": 1,
+                "ProjectPath": "/data/compose/32",
+                "CreationDate": 1737488797,
+                "CreatedBy": "admin",
+                "UpdateDate": 1737491472,
+                "UpdatedBy": "admin",
+                "AdditionalFiles": null,
+                "AutoUpdate": null,
+                "Option": null,
+                "GitConfig": null,
+                "FromAppTemplate": false,
+                "Namespace": ""
+              },
+              {
+                "Id": 35,
+                "Name": "jupyter",
+                "Type": 2,
+                "EndpointId": 3,
+                "SwarmId": "",
+                "EntryPoint": "docker-compose.yml",
+                "Env": [],
+                "ResourceControl": null,
+                "Status": 1,
+                "ProjectPath": "/data/compose/35",
+                "CreationDate": 1738071683,
+                "CreatedBy": "admin",
+                "UpdateDate": 0,
+                "UpdatedBy": "",
+                "AdditionalFiles": null,
+                "AutoUpdate": null,
+                "Option": null,
+                "GitConfig": null,
+                "FromAppTemplate": false,
+                "Namespace": ""
+              },
+              {
+                "Id": 36,
+                "Name": "jellyseer",
+                "Type": 2,
+                "EndpointId": 3,
+                "SwarmId": "",
+                "EntryPoint": "docker-compose.yml",
+                "Env": [],
+                "ResourceControl": null,
+                "Status": 1,
+                "ProjectPath": "/data/compose/36",
+                "CreationDate": 1738615169,
+                "CreatedBy": "admin",
+                "UpdateDate": 1738615705,
+                "UpdatedBy": "admin",
+                "AdditionalFiles": null,
+                "AutoUpdate": null,
+                "Option": null,
+                "GitConfig": null,
+                "FromAppTemplate": false,
+                "Namespace": ""
+              },
+              {
+                "Id": 44,
+                "Name": "vpn-project",
+                "Type": 2,
+                "EndpointId": 3,
+                "SwarmId": "",
+                "EntryPoint": "docker-compose.yml",
+                "Env": [],
+                "ResourceControl": {
+                  "Id": 47,
+                  "ResourceId": "3_vpn-project",
+                  "SubResourceIds": [],
+                  "Type": 6,
+                  "UserAccesses": [],
+                  "TeamAccesses": [],
+                  "Public": false,
+                  "AdministratorsOnly": true,
+                  "System": false
+                },
+                "Status": 1,
+                "ProjectPath": "/data/compose/44",
+                "CreationDate": 1738703275,
+                "CreatedBy": "admin",
+                "UpdateDate": 1738705779,
+                "UpdatedBy": "admin",
+                "AdditionalFiles": null,
+                "AutoUpdate": null,
+                "Option": null,
+                "GitConfig": null,
+                "FromAppTemplate": false,
+                "Namespace": ""
+              },
+              {
+                "Id": 45,
+                "Name": "test",
+                "Type": 2,
+                "EndpointId": 3,
+                "SwarmId": "",
+                "EntryPoint": "docker-compose.yml",
+                "Env": [],
+                "ResourceControl": {
+                  "Id": 48,
+                  "ResourceId": "3_test",
+                  "SubResourceIds": [],
+                  "Type": 6,
+                  "UserAccesses": [],
+                  "TeamAccesses": [],
+                  "Public": false,
+                  "AdministratorsOnly": true,
+                  "System": false
+                },
+                "Status": 1,
+                "ProjectPath": "/data/compose/45",
+                "CreationDate": 1739105471,
+                "CreatedBy": "admin",
+                "UpdateDate": 1739974641,
+                "UpdatedBy": "admin",
+                "AdditionalFiles": null,
+                "AutoUpdate": null,
+                "Option": null,
+                "GitConfig": null,
+                "FromAppTemplate": false,
+                "Namespace": ""
+              }
+            ]
+          },
+          "webhookUrl": "http://localhost:5678/webhook-test/docker-stack",
+          "executionMode": "test"
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Docker Event Webhook": {
+      "main": [
+        [
+          {
+            "node": "Process Stack Change",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Trigger Obsidian Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Stack Change": {
+      "main": [
+        [
+          {
+            "node": "Pull Docker Compose",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pull Docker Compose": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "644e38a5-9089-4635-a274-761c9ec2d776",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "c32e3c1b40330ef7ed0fc96d39fa8613559f9f9b2329c7939c5916ff5203e077"
+  },
+  "id": "yeXlBc4IvAYBPYIk",
+  "tags": [
+    {
+      "createdAt": "2025-01-18T15:17:02.390Z",
+      "updatedAt": "2025-01-18T15:17:02.390Z",
+      "id": "PkCGPFktwzpOEWxY",
+      "name": "Preproduction"
+    }
+  ]
+}
