@@ -1,0 +1,350 @@
+{
+  "name": "Obsidian Service Creation Template",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "867e40ec-6d13-43df-9b94-a39eb6433dec",
+        "authentication": "headerAuth",
+        "options": {}
+      },
+      "name": "Docker Event Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "position": [
+        -40,
+        -180
+      ],
+      "id": "eb55fc16-c970-49a6-9844-6f415ae17c82",
+      "typeVersion": 2,
+      "webhookId": "867e40ec-6d13-43df-9b94-a39eb6433dec",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "1ASqfR4xwKGzzrbj",
+          "name": "Portainer Header Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "llama3.2:3b",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+      "typeVersion": 1,
+      "position": [
+        1000,
+        40
+      ],
+      "id": "5e150989-86ac-4599-8c82-4bddfe0e2df0",
+      "name": "Ollama Chat Model",
+      "credentials": {
+        "ollamaApi": {
+          "id": "q5NK74Xoa0XoaPAG",
+          "name": "Ollama account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// N8N Function Node code\nconst processWebhookData = (items) => {\n  const firstItem = items[0];\n  const stacks = firstItem.json.body.stacks;\n  \n  // Find most recently updated stack\n  const sorted = stacks.sort((a, b) => b.UpdateDate - a.UpdateDate);\n  const mostRecent = sorted[0];\n  \n  // Get stack-specific context\n  const stackContext = getStackContext(mostRecent.Name);\n  \n  // Format environment variables for display\n  const envVars = mostRecent.Env.map(env => `- ${env.name}: ${env.value}`).join('\\n');\n  \n  // Create detailed output\n  const output = {\n    stackInfo: {\n      name: mostRecent.Name,\n      id: mostRecent.Id,\n      lastUpdate: new Date(mostRecent.UpdateDate * 1000).toISOString(),\n      updatedBy: mostRecent.UpdatedBy,\n      environment: mostRecent.Env,\n      projectPath: mostRecent.ProjectPath,\n      status: mostRecent.Status === 1 ? 'Active' : 'Inactive',\n      // Add Portainer-specific information for the next node\n      portainerInfo: {\n        stackId: mostRecent.Id,\n        endpointId: mostRecent.EndpointId,\n        // The URL to fetch the compose file will be:\n        // GET /api/stacks/{stackId}/file?endpointId={endpointId}\n        composeFilePath: `/api/stacks/${mostRecent.Id}/file?endpointId=${mostRecent.EndpointId}`\n      }\n    },\n    // Create a placeholder for the compose content that will be filled by the HTTP Request\n    composeContent: null,\n    prompt: `Please create or update documentation for the Docker stack \"${mostRecent.Name}\".\n\nStack Information:\n- Name: ${mostRecent.Name}\n- Status: ${mostRecent.Status === 1 ? 'Active' : 'Inactive'}\n- Last Updated: ${new Date(mostRecent.UpdateDate * 1000).toISOString()}\n- Updated By: ${mostRecent.UpdatedBy}\n- Location: ${mostRecent.ProjectPath}\n\n${stackContext}\n\n${envVars ? `Environment Variables:\\n${envVars}` : 'No environment variables configured.'}\n\n[Compose file content will be added by the next node]\n\nPlease create comprehensive Markdown documentation that includes:\n1. Overview of the stack's purpose and functionality\n2. Configuration details and deployment location\n3. Environment variable explanations (if present)\n4. Analysis of the docker-compose configuration\n5. Dependencies and requirements\n6. Any notable changes in this update\n7. Current deployment status\n\nFormat the documentation with proper Markdown headers and sections.`\n  };\n  \n  return { json: output };\n};\n\n// Helper function to provide context for known stacks\nfunction getStackContext(stackName) {\n  const contexts = {\n    'immich': 'This is a self-hosted photo and video backup solution. Consider documenting backup locations, database configuration, and media handling.',\n    'paperless': 'This is a document management system with OCR capabilities. Include information about document processing, OCR languages, and storage locations.',\n    'n8n': 'This is an automation platform. Document the webhook configurations, database connections, and any custom workflow requirements.',\n    'obsidian': 'This is for the Obsidian note-taking application. Include details about sync configuration and plugin requirements.',\n    'jupyter': 'This is a Jupyter notebook server. Document Python environment details and data persistence.',\n    'guacamole': 'This is a remote desktop gateway. Include connection methods and security configurations.',\n    'nginx': 'This is the NGINX web server. Document proxy configurations and SSL settings.',\n  };\n  \n  return contexts[stackName.toLowerCase()] \n    ? `Stack Context:\\n${contexts[stackName.toLowerCase()]}\\n`\n    : '';\n}\n\nreturn processWebhookData($input.all());"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        180,
+        -180
+      ],
+      "id": "adc69393-db82-4762-b327-05c9f98d9d8a",
+      "name": "Process Stack Change"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        620,
+        -180
+      ],
+      "id": "92970991-744c-466e-8be9-43642b443c3c",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "url": "=https://[IP:[PORT]/api/stacks/{{$json.stackInfo.portainerInfo.stackId}}/file?endpointId={{$json.stackInfo.portainerInfo.endpointId}}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "[Secret Webhook Key]"
+            }
+          ]
+        },
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        400,
+        -300
+      ],
+      "id": "b64d4df9-f1db-4335-b0d4-b4cf6cdd6e56",
+      "name": "Pull Docker Compose",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "1ASqfR4xwKGzzrbj",
+          "name": "Portainer Header Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "=http://[IP]:[PORT]/vault/your/path/{{ $('Merge').item.json.stackInfo.name }}.md",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "text/markdown",
+        "body": "={{ $json.output }}",
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1480,
+        -40
+      ],
+      "id": "7c70af7b-51c6-43a2-ac43-f61a44dfd16a",
+      "name": "Update  Stack Note for Obsidian",
+      "notesInFlow": true,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "cTsarqIIxp7sSNUw",
+          "name": "Obsidian Technical API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "=http://[IP]:[PORT]/vault/your/path/{{ $('Merge').item.json.stackInfo.name }}.md",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "text/markdown",
+        "body": "={{ $json.output }}",
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "name": "New Stack Note for Obsidian",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        1480,
+        -260
+      ],
+      "id": "eee712a2-5945-4128-a429-4c5c258afe83",
+      "typeVersion": 4.2,
+      "notesInFlow": true,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "cTsarqIIxp7sSNUw",
+          "name": "Obsidian Technical API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "e1399217-4bd1-4734-80b3-2d11db07aa8f",
+              "name": "prompt",
+              "value": "=Please create documentation for the following Docker stack update:\n\nStack Information:\n- Name: {{ $json.stackInfo.name }}\n- Status: {{ $json.stackInfo.status }}\n- Last Updated: {{ $json.stackInfo.lastUpdate }}\n- Updated By: {{ $json.stackInfo.updatedBy }}\n- Location: {{ $json.stackInfo.projectPath }}\n\nDocker Compose Configuration:\n```yaml\n{{ $json.StackFileContent }}\n\nYou are a documentation specialist for Docker infrastructure. Generate complete documentation following this exact template:\n\n# {{ $json.stackInfo.name }}\n\n## Overview\n- Service: {{ $json.stackInfo.name }}\n- Status: {{ $json.stackInfo.status }}\n- Last Updated: {{ $json.stackInfo.lastUpdate }}\n- Updated By: {{ $json.stackInfo.updatedBy }}\n- Location: {{ $json.stackInfo.projectPath }}\n\n## Configuration\n### Docker Compose\n```yaml\n{{ $json.StackFileContent }}\nEnvironment Variables\n[List all environment variables with explanations]\nPorts\n[List all port mappings and their purposes]\nVolumes\n[List all volume mounts and their purposes]\n\n## Setup Guide\n### Prerequisites\n- Required software\n- Network requirements\n- Dependencies\n\n### Installation Steps\n1. Ensure Docker is running\n2. Configure environment variables\n3. Deploy the stack\n\n### Post-Installation\n- [ ] Verify service is running\n- [ ] Test basic functionality\n- [ ] Configure backups\n- [ ] Set up monitoring\n\n## Troubleshooting\n### Common Issues\n- Service won't start\n- Connection issues\n- Permission problems\n\n### Log Locations\n- Container logs: `docker logs {{ $json.stackInfo.name }}`\n- Service-specific logs: [Specify paths based on configuration]\n\n### Quick Fixes\n1. Check container status\n2. Verify network connectivity\n3. Validate configuration\n4. Review resource usage\n\nCopy## Notes\n- Important operational details\n- Known limitations\n- Related services\n- Security considerations\n\n#service #docker #{{ $json.stackInfo.name.toLowerCase() }}",
+              "type": "string"
+            },
+            {
+              "id": "29ba2b4a-9632-4ed7-910b-8e126c4d3719",
+              "name": "stackInfo",
+              "value": "={\n  \"name\": \"{{ $json.stackInfo.name }}\",\n}",
+              "type": "string"
+            },
+            {
+              "id": "cc60d052-c348-4f56-baa8-ef2ac6615377",
+              "name": "composeContent",
+              "value": "={{ $json.StackFileContent }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        840,
+        -180
+      ],
+      "id": "c17e80ee-6c69-4864-96a5-f49a41a55ff9",
+      "name": "Clean  For Agent"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Please create documentation for the following Docker stack change:\nService Name: {{ $('Merge').item.json.stackInfo.name }}\nCreated: {{ DateTime.fromMillis($('Merge').item.json.stackInfo.CreationDate * 1000).toFormat('yyyy-MM-dd HH:mm:ss') }}\nLast Updated: {{ $('Merge').item.json.stackInfo.lastUpdate }}\nStatus: {{ $('Merge').item.json.stackInfo.status }}\nUpdated By: {{ $('Merge').item.json.stackInfo.updatedBy }}\nLocation: {{ $('Merge').item.json.stackInfo.projectPath }}\n\nConfiguration:\n{{ $('Merge').item.json.StackFileContent }}",
+        "options": {
+          "systemMessage": "You are a documentation specialist for Docker infrastructure. When a Docker stack is created or changes, you will generate complete documentation following an exact template structure. \n\nYour task is to analyze the provided Docker configuration and generate documentation that exactly matches the following template, maintaining all headers and sections:\n\n# {{service_name}}\n\n## Overview\n- **Service**: {{service_name}}\n- **Image**: {{image}}\n- **Last Updated**: {{update_date}}\n- **Updated By**: {{updated_by}}\n- **Status**: {{status}}\n- **Location**: {{location}}\n\n## Configuration\n### Docker Compose\n```yaml\n{{compose_configuration}}\n```\n\n### Environment Variables\nList and explain each environment variable from the compose file.\nFormat as:\n- `VARIABLE_NAME`: Description/purpose of this variable\n- `ANOTHER_VAR`: Description/purpose of this variable\n\n### Ports\nList each port mapping from the compose file.\nFormat as:\n- `host:container`: Purpose/service (e.g., `8080:80`: Web interface)\n\n### Deployment\nList deployment configurations from the compose file.\nFormat as:\n- Replicas: Number of replicas\n- Labels: Purpose of each label\n- Other deployment settings\n\n### Volumes\nList each volume mount from the compose file.\nFormat as:\n- `host:container`: Purpose of mount\n\n### Infrastructure Integration\n- **Documentation**: Managed in Obsidian vault at {{location}}\n- **Automation**: Monitored by n8n for configuration changes\n- **Network**: Served via Synology reverse proxy if externally accessible\n- **Related Stacks**: List any stacks this service depends on or integrates with\n\n## Setup Guide\n### Prerequisites\n- Required software\n- Network requirements\n- Dependencies\n\n### Installation Steps\n1. Ensure Docker is running\n2. Configure environment variables\n3. Deploy the stack\n\n### Post-Installation\n- [ ] Verify service is running\n- [ ] Test basic functionality\n- [ ] Configure backups\n- [ ] Set up monitoring\n\n## Troubleshooting\n### Common Issues\n- Service won't start\n- Connection issues\n- Permission problems\n\n### Log Locations\n- Container logs: `docker logs {{container_name}}`\n- Service-specific logs: {{log_paths}}\n\n### Quick Fixes\n1. Check container status\n2. Verify network connectivity\n3. Validate configuration\n4. Review resource usage\n\n## Notes\n- Important operational details\n- Known limitations\n- Related services\n- Security considerations\n\n#service #docker #{{service_name_lowercase}}\n\nRules:\n- Replace all {{variables}} with actual values from the Docker configuration\n- Extract image information from the compose file\n- Parse and explain all environment variables found in the configuration\n- Document all port mappings with their purposes\n- Describe any deployment configurations (replicas, labels)\n- If a value is not available, use \"Not specified\" rather than leaving empty\n- Preserve exact header levels (# for title, ## for sections, ### for subsections)\n- Format all code blocks using proper markdown\n- Use technical but clear language\n- Include the tags at the bottom exactly as shown\n- Base container name on the service name in compose file\n- For each environment variable, explain its purpose based on the service type"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        1120,
+        -180
+      ],
+      "id": "ea00e58e-d203-4ed0-8162-88151f8098d4",
+      "name": "Obsidian Note Agent"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Docker Event Webhook": {
+      "main": [
+        [
+          {
+            "node": "Process Stack Change",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Obsidian Note Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Stack Change": {
+      "main": [
+        [
+          {
+            "node": "Pull Docker Compose",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Clean  For Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pull Docker Compose": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update  Stack Note for Obsidian": {
+      "main": [
+        []
+      ]
+    },
+    "New Stack Note for Obsidian": {
+      "main": [
+        []
+      ]
+    },
+    "Clean  For Agent": {
+      "main": [
+        [
+          {
+            "node": "Obsidian Note Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Obsidian Note Agent": {
+      "main": [
+        [
+          {
+            "node": "Update  Stack Note for Obsidian",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "New Stack Note for Obsidian",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "7c059063-e4b6-44a7-a42a-71fe022c9812",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "c32e3c1b40330ef7ed0fc96d39fa8613559f9f9b2329c7939c5916ff5203e077"
+  },
+  "id": "Y1WK6JZdeEoVw6hm",
+  "tags": []
+}
